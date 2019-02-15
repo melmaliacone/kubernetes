@@ -64,7 +64,7 @@ var (
 
 		* Certificate signing request was sent to apiserver and approval was received.
 		* The Kubelet was informed of the new secure connection details.
-		* Master label and taint were applied to the new node.
+		* Control plane (master) label and taint were applied to the new node.
 		* The Kubernetes control plane instances scaled up.
 		{{.etcdMessage}}
 
@@ -171,7 +171,7 @@ func NewCmdJoin(out io.Writer, joinOptions *joinOptions) *cobra.Command {
 			err = data.Run()
 			kubeadmutil.CheckErr(err)
 		},
-		// We accept the master location as an optional positional argument
+		// We accept the control-plane location as an optional positional argument
 		Args: cobra.MaximumNArgs(1),
 	}
 
@@ -452,7 +452,7 @@ func (j *joinData) Run() error {
 	return nil
 }
 
-// PostInstallControlPlane marks the new node as master and update the cluster status with information about current node
+// PostInstallControlPlane marks the new node as control-plane and update the cluster status with information about current node
 func (j *joinData) PostInstallControlPlane(initConfiguration *kubeadmapi.InitConfiguration) error {
 	kubeConfigFile := filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.AdminKubeConfigFileName)
 
