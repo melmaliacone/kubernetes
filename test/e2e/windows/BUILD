@@ -7,6 +7,7 @@ go_library(
     srcs = [
         "density.go",
         "framework.go",
+        "dns.go",
     ],
     importpath = "k8s.io/kubernetes/test/e2e/windows",
     visibility = ["//visibility:public"],
