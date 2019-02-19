@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2015 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,13 +39,14 @@ var _ = SIGDescribe("[Feature:Windows] DNS", func() {
 	/*
 		Release : v1.9
 		Testname: DNS, cluster
-		Description: When a Pod is created, the pod MUST be able to resolve cluster dns entries such as kubernetes.default via DNS and /etc/hosts.
+		Description: When a Pod is created, the pod MUST be able to resolve cluster dns entries such as kubernetes.default via DNS.
 	*/
 	framework.ConformanceIt("should provide DNS for the cluster ", func() {
 		// All the names we need to be able to resolve.
 		// TODO: Spin up a separate test service and test that dns works for that service.
-		// NOTE: This only contains the FQDN and the Host name, for testing partial name, see the test below
 		namesToResolve := []string{
+			"kubernetes.default",
+			"kubernetes.default.svc",
 			fmt.Sprintf("kubernetes.default.svc.%s", framework.TestContext.ClusterDNSDomain),
 		}
 		// Added due to #8512. This is critical for GCE and GKE deployments.
@@ -53,35 +54,8 @@ var _ = SIGDescribe("[Feature:Windows] DNS", func() {
 			namesToResolve = append(namesToResolve, "google.com")
 			namesToResolve = append(namesToResolve, "metadata")
 		}
-		hostFQDN := fmt.Sprintf("%s.%s.%s.svc.%s", dnsTestPodHostName, dnsTestServiceName, f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		hostEntries := []string{hostFQDN, dnsTestPodHostName}
-		wheezyProbeCmd, wheezyFileNames := createProbeCommand(namesToResolve, hostEntries, "", "wheezy", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		jessieProbeCmd, jessieFileNames := createProbeCommand(namesToResolve, hostEntries, "", "jessie", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
-		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
-
-		// Run a pod which probes DNS and exposes the results by HTTP.
-		By("creating a pod to probe DNS")
-		pod := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
-		validateDNSResults(f, pod, append(wheezyFileNames, jessieFileNames...))
-	})
-
-	It("should resolve DNS of partial qualified names for the cluster ", func() {
-		// All the names we need to be able to resolve.
-		// TODO: Spin up a separate test service and test that dns works for that service.
-		namesToResolve := []string{
-			"kubernetes.default",
-			"kubernetes.default.svc",
-		}
-		// Added due to #8512. This is critical for GCE and GKE deployments.
-		if framework.ProviderIs("gce", "gke") {
-			namesToResolve = append(namesToResolve, "google.com")
-			namesToResolve = append(namesToResolve, "metadata")
-		}
-		hostFQDN := fmt.Sprintf("%s.%s.%s.svc.cluster.local", dnsTestPodHostName, dnsTestServiceName, f.Namespace.Name)
-		hostEntries := []string{hostFQDN, dnsTestPodHostName}
-		wheezyProbeCmd, wheezyFileNames := createProbeCommand(namesToResolve, hostEntries, "", "wheezy", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		jessieProbeCmd, jessieFileNames := createProbeCommand(namesToResolve, hostEntries, "", "jessie", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
+		wheezyProbeCmd, wheezyFileNames := createProbeCommand(namesToResolve, nil, "", "wheezy", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
+		jessieProbeCmd, jessieFileNames := createProbeCommand(namesToResolve, nil, "", "jessie", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
 		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
 		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
 
@@ -92,12 +66,30 @@ var _ = SIGDescribe("[Feature:Windows] DNS", func() {
 	})
 
 	/*
+		Release : v1.14
+		Testname: DNS, cluster
+		Description: When a Pod is created, the pod MUST be able to resolve cluster dns entries such as kubernetes.default via /etc/hosts.
+	*/
+	framework.ConformanceIt("should provide /etc/hosts entries for the cluster [LinuxOnly]", func() {
+		hostFQDN := fmt.Sprintf("%s.%s.%s.svc.%s", dnsTestPodHostName, dnsTestServiceName, f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
+		hostEntries := []string{hostFQDN, dnsTestPodHostName}
+		wheezyProbeCmd, wheezyFileNames := createProbeCommand(nil, hostEntries, "", "wheezy", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
+		jessieProbeCmd, jessieFileNames := createProbeCommand(nil, hostEntries, "", "jessie", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
+		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
+		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
+
+		// Run a pod which probes /etc/hosts and exposes the results by HTTP.
+		By("creating a pod to probe /etc/hosts")
+		pod := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
+		validateDNSResults(f, pod, append(wheezyFileNames, jessieFileNames...))
+	})
+
+	/*
 		Release : v1.9
 		Testname: DNS, services
 		Description: When a headless service is created, the service MUST be able to resolve all the required service endpoints. When the service is created, any pod in the same namespace must be able to resolve the service by all of the expected DNS names.
 	*/
 	framework.ConformanceIt("should provide DNS for services ", func() {
-		// NOTE: This only contains the FQDN and the Host name, for testing partial name, see the test below
 		// Create a test headless service.
 		By("Creating a test headless service")
 		testServiceSelector := map[string]string{
@@ -117,53 +109,6 @@ var _ = SIGDescribe("[Feature:Windows] DNS", func() {
 		regularService, err = f.ClientSet.CoreV1().Services(f.Namespace.Name).Create(regularService)
 		Expect(err).NotTo(HaveOccurred(), "failed to create regular service: %s", regularServiceName)
 
-		defer func() {
-			By("deleting the test service")
-			defer GinkgoRecover()
-			f.ClientSet.CoreV1().Services(f.Namespace.Name).Delete(regularService.Name, nil)
-		}()
-
-		// All the names we need to be able to resolve.
-		// TODO: Create more endpoints and ensure that multiple A records are returned
-		// for headless service.
-		namesToResolve := []string{
-			fmt.Sprintf("%s.%s.svc.cluster.local", headlessService.Name, f.Namespace.Name),
-			fmt.Sprintf("_http._tcp.%s.%s.svc.cluster.local", headlessService.Name, f.Namespace.Name),
-			fmt.Sprintf("_http._tcp.%s.%s.svc.cluster.local", regularService.Name, f.Namespace.Name),
-		}
-
-		wheezyProbeCmd, wheezyFileNames := createProbeCommand(namesToResolve, nil, regularService.Spec.ClusterIP, "wheezy", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		jessieProbeCmd, jessieFileNames := createProbeCommand(namesToResolve, nil, regularService.Spec.ClusterIP, "jessie", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
-		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
-
-		// Run a pod which probes DNS and exposes the results by HTTP.
-		By("creating a pod to probe DNS")
-		pod := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
-		pod.ObjectMeta.Labels = testServiceSelector
-
-		validateDNSResults(f, pod, append(wheezyFileNames, jessieFileNames...))
-	})
-
-	It("should resolve DNS of partial qualified names for services ", func() {
-		// Create a test headless service.
-		By("Creating a test headless service")
-		testServiceSelector := map[string]string{
-			"dns-test": "true",
-		}
-		headlessService := framework.CreateServiceSpec(dnsTestServiceName, "", true, testServiceSelector)
-		_, err := f.ClientSet.CoreV1().Services(f.Namespace.Name).Create(headlessService)
-		Expect(err).NotTo(HaveOccurred(), "failed to create headless service: %s", dnsTestServiceName)
-		defer func() {
-			By("deleting the test headless service")
-			defer GinkgoRecover()
-			f.ClientSet.CoreV1().Services(f.Namespace.Name).Delete(headlessService.Name, nil)
-		}()
-
-		regularServiceName := "test-service-2"
-		regularService := framework.CreateServiceSpec(regularServiceName, "", false, testServiceSelector)
-		regularService, err = f.ClientSet.CoreV1().Services(f.Namespace.Name).Create(regularService)
-		Expect(err).NotTo(HaveOccurred(), "failed to create regular service: %s", regularServiceName)
 		defer func() {
 			By("deleting the test service")
 			defer GinkgoRecover()
@@ -228,72 +173,6 @@ var _ = SIGDescribe("[Feature:Windows] DNS", func() {
 		pod1.Spec.Subdomain = serviceName
 
 		validateDNSResults(f, pod1, append(wheezyFileNames, jessieFileNames...))
-	})
-
-	It("should provide DNS for ExternalName services", func() {
-		// Create a test ExternalName service.
-		By("Creating a test externalName service")
-		serviceName := "dns-test-service-3"
-		externalNameService := framework.CreateServiceSpec(serviceName, "foo.example.com", false, nil)
-		_, err := f.ClientSet.CoreV1().Services(f.Namespace.Name).Create(externalNameService)
-		Expect(err).NotTo(HaveOccurred(), "failed to create ExternalName service: %s", serviceName)
-
-		defer func() {
-			By("deleting the test externalName service")
-			defer GinkgoRecover()
-			f.ClientSet.CoreV1().Services(f.Namespace.Name).Delete(externalNameService.Name, nil)
-		}()
-		hostFQDN := fmt.Sprintf("%s.%s.svc.%s", serviceName, f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		wheezyProbeCmd, wheezyFileName := createTargetedProbeCommand(hostFQDN, "CNAME", "wheezy")
-		jessieProbeCmd, jessieFileName := createTargetedProbeCommand(hostFQDN, "CNAME", "jessie")
-		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
-		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
-
-		// Run a pod which probes DNS and exposes the results by HTTP.
-		By("creating a pod to probe DNS")
-		pod1 := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
-
-		validateTargetedProbeOutput(f, pod1, []string{wheezyFileName, jessieFileName}, "foo.example.com.")
-
-		// Test changing the externalName field
-		By("changing the externalName to bar.example.com")
-		_, err = framework.UpdateService(f.ClientSet, f.Namespace.Name, serviceName, func(s *v1.Service) {
-			s.Spec.ExternalName = "bar.example.com"
-		})
-		Expect(err).NotTo(HaveOccurred(), "failed to change externalName of service: %s", serviceName)
-		wheezyProbeCmd, wheezyFileName = createTargetedProbeCommand(hostFQDN, "CNAME", "wheezy")
-		jessieProbeCmd, jessieFileName = createTargetedProbeCommand(hostFQDN, "CNAME", "jessie")
-		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
-		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
-
-		// Run a pod which probes DNS and exposes the results by HTTP.
-		By("creating a second pod to probe DNS")
-		pod2 := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
-
-		validateTargetedProbeOutput(f, pod2, []string{wheezyFileName, jessieFileName}, "bar.example.com.")
-
-		// Test changing type from ExternalName to ClusterIP
-		By("changing the service to type=ClusterIP")
-		_, err = framework.UpdateService(f.ClientSet, f.Namespace.Name, serviceName, func(s *v1.Service) {
-			s.Spec.Type = v1.ServiceTypeClusterIP
-			s.Spec.Ports = []v1.ServicePort{
-				{Port: 80, Name: "http", Protocol: v1.ProtocolTCP},
-			}
-		})
-		Expect(err).NotTo(HaveOccurred(), "failed to change service type to ClusterIP for service: %s", serviceName)
-		wheezyProbeCmd, wheezyFileName = createTargetedProbeCommand(hostFQDN, "A", "wheezy")
-		jessieProbeCmd, jessieFileName = createTargetedProbeCommand(hostFQDN, "A", "jessie")
-		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
-		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
-
-		// Run a pod which probes DNS and exposes the results by HTTP.
-		By("creating a third pod to probe DNS")
-		pod3 := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
-
-		svc, err := f.ClientSet.CoreV1().Services(f.Namespace.Name).Get(externalNameService.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred(), "failed to get service: %s", externalNameService.Name)
-
-		validateTargetedProbeOutput(f, pod3, []string{wheezyFileName, jessieFileName}, svc.Spec.ClusterIP)
 	})
 
 	It("should support configurable pod resolv.conf", func() {
