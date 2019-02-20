@@ -33,7 +33,7 @@ import (
 const dnsTestPodHostName = "dns-querier-1"
 const dnsTestServiceName = "dns-test-service"
 
-var _ = SIGDescribe("[Feature:Windows] DNS", func() {
+var _ = SIGDescribe("DNS", func() {
 	f := framework.NewDefaultFramework("dns")
 
 	/*
@@ -61,25 +61,6 @@ var _ = SIGDescribe("[Feature:Windows] DNS", func() {
 
 		// Run a pod which probes DNS and exposes the results by HTTP.
 		By("creating a pod to probe DNS")
-		pod := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
-		validateDNSResults(f, pod, append(wheezyFileNames, jessieFileNames...))
-	})
-
-	/*
-		Release : v1.14
-		Testname: DNS, cluster
-		Description: When a Pod is created, the pod MUST be able to resolve cluster dns entries such as kubernetes.default via /etc/hosts.
-	*/
-	framework.ConformanceIt("should provide /etc/hosts entries for the cluster [LinuxOnly]", func() {
-		hostFQDN := fmt.Sprintf("%s.%s.%s.svc.%s", dnsTestPodHostName, dnsTestServiceName, f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		hostEntries := []string{hostFQDN, dnsTestPodHostName}
-		wheezyProbeCmd, wheezyFileNames := createProbeCommand(nil, hostEntries, "", "wheezy", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		jessieProbeCmd, jessieFileNames := createProbeCommand(nil, hostEntries, "", "jessie", f.Namespace.Name, framework.TestContext.ClusterDNSDomain)
-		By("Running these commands on wheezy: " + wheezyProbeCmd + "\n")
-		By("Running these commands on jessie: " + jessieProbeCmd + "\n")
-
-		// Run a pod which probes /etc/hosts and exposes the results by HTTP.
-		By("creating a pod to probe /etc/hosts")
 		pod := createDNSPod(f.Namespace.Name, wheezyProbeCmd, jessieProbeCmd, dnsTestPodHostName, dnsTestServiceName)
 		validateDNSResults(f, pod, append(wheezyFileNames, jessieFileNames...))
 	})
