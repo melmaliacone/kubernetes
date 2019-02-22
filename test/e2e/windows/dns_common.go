@@ -290,11 +290,14 @@ func generateDNSServerPod(aRecords map[string]string) *v1.Pod {
 					Name:  "dns",
 					Image: imageutils.GetE2EImage(imageutils.Dnsutils),
 					Command: []string{
-						"/usr/sbin/dnsmasq",
-						"-u", "root",
-						"-k",
-						"--log-facility", "-",
-						"-q",
+						"powershell",
+						"Start-Sleep",
+						"1000",
+						// "/usr/sbin/dnsmasq",
+						// "-u", "root",
+						// "-k",
+						// "--log-facility", "-",
+						// "-q",
 					},
 				},
 			},
@@ -302,11 +305,11 @@ func generateDNSServerPod(aRecords map[string]string) *v1.Pod {
 		},
 	}
 
-	for name, ip := range aRecords {
-		pod.Spec.Containers[0].Command = append(
-			pod.Spec.Containers[0].Command,
-			fmt.Sprintf("-A/%v/%v", name, ip))
-	}
+	// for name, ip := range aRecords {
+	// 	pod.Spec.Containers[0].Command = append(
+	// 		pod.Spec.Containers[0].Command,
+	// 		fmt.Sprintf("-A/%v/%v", name, ip))
+	// }
 	return pod
 }
 
@@ -408,29 +411,29 @@ func createDNSPod(namespace, wheezyProbeCmd, jessieProbeCmd, podHostName, servic
 					VolumeMounts: []v1.VolumeMount{
 						{
 							Name:      "results",
-							MountPath: "/results",
+							MountPath: "C:\\results",
 						},
 					},
 				},
 				{
 					Name:    "querier",
 					Image:   imageutils.GetE2EImage(imageutils.Dnsutils),
-					Command: []string{"sh", "-c", wheezyProbeCmd},
+					Command: []string{"cmd", "/c", wheezyProbeCmd},
 					VolumeMounts: []v1.VolumeMount{
 						{
 							Name:      "results",
-							MountPath: "/results",
+							MountPath: "C:\\results",
 						},
 					},
 				},
 				{
 					Name:    "jessie-querier",
 					Image:   imageutils.GetE2EImage(imageutils.JessieDnsutils),
-					Command: []string{"sh", "-c", jessieProbeCmd},
+					Command: []string{"cmd", "/c", jessieProbeCmd},
 					VolumeMounts: []v1.VolumeMount{
 						{
 							Name:      "results",
-							MountPath: "/results",
+							MountPath: "C:\\results",
 						},
 					},
 				},
@@ -457,23 +460,23 @@ func createProbeCommand(namesToResolve []string, hostEntries []string, ptrLookup
 		}
 		fileName := fmt.Sprintf("%s_udp@%s", fileNamePrefix, name)
 		fileNames = append(fileNames, fileName)
-		probeCmd += fmt.Sprintf(`check="$$(dig +notcp +noall +answer +search %s %s)" && test -n "$$check" && echo OK > /results/%s;`, name, lookup, fileName)
+		probeCmd += fmt.Sprintf(`check="$$(dig +notcp +noall +answer +search %s %s)" && test -n "$$check" && echo OK > C:\\results\\s;`, name, lookup, fileName)
 		fileName = fmt.Sprintf("%s_tcp@%s", fileNamePrefix, name)
 		fileNames = append(fileNames, fileName)
-		probeCmd += fmt.Sprintf(`check="$$(dig +tcp +noall +answer +search %s %s)" && test -n "$$check" && echo OK > /results/%s;`, name, lookup, fileName)
+		probeCmd += fmt.Sprintf(`check="$$(dig +tcp +noall +answer +search %s %s)" && test -n "$$check" && echo OK > C:\\results\\%s;`, name, lookup, fileName)
 	}
 
 	for _, name := range hostEntries {
 		fileName := fmt.Sprintf("%s_hosts@%s", fileNamePrefix, name)
 		fileNames = append(fileNames, fileName)
-		probeCmd += fmt.Sprintf(`test -n "$$(getent hosts %s)" && echo OK > /results/%s;`, name, fileName)
+		probeCmd += fmt.Sprintf(`test -n "$$(getent hosts %s)" && echo OK > C:\\results\\%s;`, name, fileName)
 	}
 
 	podARecByUDPFileName := fmt.Sprintf("%s_udp@PodARecord", fileNamePrefix)
 	podARecByTCPFileName := fmt.Sprintf("%s_tcp@PodARecord", fileNamePrefix)
 	probeCmd += fmt.Sprintf(`podARec=$$(hostname -i| awk -F. '{print $$1"-"$$2"-"$$3"-"$$4".%s.pod.%s"}');`, namespace, dnsDomain)
-	probeCmd += fmt.Sprintf(`check="$$(dig +notcp +noall +answer +search $${podARec} A)" && test -n "$$check" && echo OK > /results/%s;`, podARecByUDPFileName)
-	probeCmd += fmt.Sprintf(`check="$$(dig +tcp +noall +answer +search $${podARec} A)" && test -n "$$check" && echo OK > /results/%s;`, podARecByTCPFileName)
+	probeCmd += fmt.Sprintf(`check="$$(dig +notcp +noall +answer +search $${podARec} A)" && test -n "$$check" && echo OK > C:\\results\\%s;`, podARecByUDPFileName)
+	probeCmd += fmt.Sprintf(`check="$$(dig +tcp +noall +answer +search $${podARec} A)" && test -n "$$check" && echo OK > C:\\results\\%s;`, podARecByTCPFileName)
 	fileNames = append(fileNames, podARecByUDPFileName)
 	fileNames = append(fileNames, podARecByTCPFileName)
 
@@ -481,8 +484,8 @@ func createProbeCommand(namesToResolve []string, hostEntries []string, ptrLookup
 		ptrLookup := fmt.Sprintf("%s.in-addr.arpa.", strings.Join(reverseArray(strings.Split(ptrLookupIP, ".")), "."))
 		ptrRecByUDPFileName := fmt.Sprintf("%s_udp@PTR", ptrLookupIP)
 		ptrRecByTCPFileName := fmt.Sprintf("%s_tcp@PTR", ptrLookupIP)
-		probeCmd += fmt.Sprintf(`check="$$(dig +notcp +noall +answer +search %s PTR)" && test -n "$$check" && echo OK > /results/%s;`, ptrLookup, ptrRecByUDPFileName)
-		probeCmd += fmt.Sprintf(`check="$$(dig +tcp +noall +answer +search %s PTR)" && test -n "$$check" && echo OK > /results/%s;`, ptrLookup, ptrRecByTCPFileName)
+		probeCmd += fmt.Sprintf(`check="$$(dig +notcp +noall +answer +search %s PTR)" && test -n "$$check" && echo OK > C:\\results\\%s;`, ptrLookup, ptrRecByUDPFileName)
+		probeCmd += fmt.Sprintf(`check="$$(dig +tcp +noall +answer +search %s PTR)" && test -n "$$check" && echo OK > C:\\results\\%s;`, ptrLookup, ptrRecByTCPFileName)
 		fileNames = append(fileNames, ptrRecByUDPFileName)
 		fileNames = append(fileNames, ptrRecByTCPFileName)
 	}
@@ -494,7 +497,7 @@ func createProbeCommand(namesToResolve []string, hostEntries []string, ptrLookup
 // createTargetedProbeCommand returns a command line that performs a DNS lookup for a specific record type
 func createTargetedProbeCommand(nameToResolve string, lookup string, fileNamePrefix string) (string, string) {
 	fileName := fmt.Sprintf("%s_udp@%s", fileNamePrefix, nameToResolve)
-	probeCmd := fmt.Sprintf("dig +short +tries=12 %s %s > /results/%s", nameToResolve, lookup, fileName)
+	probeCmd := fmt.Sprintf("dig +short +tries=12 %s %s > C:\\results\\%s", nameToResolve, lookup, fileName)
 	return probeCmd, fileName
 }
 
