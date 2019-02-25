@@ -293,11 +293,11 @@ func generateDNSServerPod(aRecords map[string]string) *v1.Pod {
 						"powershell",
 						"Start-Sleep",
 						"1000",
-						// "/usr/sbin/dnsmasq",
-						// "-u", "root",
-						// "-k",
-						// "--log-facility", "-",
-						// "-q",
+						"/usr/sbin/dnsmasq",
+						"-u", "root",
+						"-k",
+						"--log-facility", "-",
+						"-q",
 					},
 				},
 			},
@@ -305,11 +305,11 @@ func generateDNSServerPod(aRecords map[string]string) *v1.Pod {
 		},
 	}
 
-	// for name, ip := range aRecords {
-	// 	pod.Spec.Containers[0].Command = append(
-	// 		pod.Spec.Containers[0].Command,
-	// 		fmt.Sprintf("-A/%v/%v", name, ip))
-	// }
+	for name, ip := range aRecords {
+		pod.Spec.Containers[0].Command = append(
+			pod.Spec.Containers[0].Command,
+			fmt.Sprintf("-A/%v/%v", name, ip))
+	}
 	return pod
 }
 
